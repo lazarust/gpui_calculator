@@ -50,12 +50,10 @@ impl Calculator {
         cx: &mut Context<Self>,
         operator: &str,
     ) {
-        // Don't add operator if expression is empty (except for minus)
         if self.expression.is_empty() && operator != "-" {
             return;
         }
 
-        // Don't add operator if the last character is already an operator
         if !self.expression.is_empty() {
             let last_char = self.expression.chars().last().unwrap();
             if (last_char == '+' || last_char == '-' || last_char == '*' || last_char == '/')
@@ -120,7 +118,6 @@ impl Calculator {
                 cx.notify();
             }
             Err(_) => {
-                // In case of error, keep the previous solution
                 cx.notify();
             }
         }
