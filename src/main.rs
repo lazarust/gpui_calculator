@@ -56,7 +56,11 @@ impl Calculator {
 
         if !self.expression.is_empty() {
             let last_char = self.expression.chars().last().unwrap();
-            if (last_char == '+' || last_char == '-' || last_char == '*' || last_char == '/')
+            if (last_char == '+'
+                || last_char == '-'
+                || last_char == '*'
+                || last_char == '/'
+                || last_char == '^')
                 && operator != "-"
             {
                 return;
@@ -75,7 +79,7 @@ impl Calculator {
             .justify_center()
             .p_4()
             .w_80()
-            .children(vec!["+", "-", "*", "/"].iter().map(|&operator| {
+            .children(vec!["+", "-", "*", "/", ".", "^"].iter().map(|&operator| {
                 let operator_owned = operator.to_string(); // Create an owned copy for the closure
                 div()
                     .text_xl()
@@ -135,7 +139,7 @@ impl Calculator {
         for c in expr.chars() {
             if c.is_digit(10) || c == '.' {
                 num_buffer.push(c);
-            } else if c == '+' || c == '-' || c == '*' || c == '/' {
+            } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' {
                 if !num_buffer.is_empty() {
                     tokens.push(num_buffer.clone());
                     num_buffer.clear();
@@ -151,6 +155,42 @@ impl Calculator {
         }
 
         Ok(tokens)
+    }
+
+    fn handle_clear_click(
+        &mut self,
+        _event: &MouseDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.expression.clear();
+        self._solution = 0.0;
+        cx.notify();
+    }
+
+    fn render_clear_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .text_xl()
+            .border_2()
+            .p_4()
+            .rounded_lg()
+            .w_24()
+            .h_12()
+            .justify_center()
+            .items_center()
+            .text_center()
+            .cursor_pointer()
+            .border_color(rgb(BORDER_COLOR))
+            .text_color(rgb(BUTTON_FOREGROUND_COLOR))
+            .bg(rgb(BUTTON_BACKGROUND_COLOR))
+            .hover(|style| style.bg(rgb(BUTTON_HOVER_COLOR)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event, window, cx| {
+                    this.handle_clear_click(event, window, cx)
+                }),
+            )
+            .child("Clear")
     }
 
     fn parse_expression(&self, tokens: &[String], pos: usize) -> Result<(f64, usize), String> {
@@ -215,9 +255,44 @@ impl Calculator {
             return Err("Unexpected end of factor".to_string());
         }
 
+        let (left, current_pos) = self.parse_power(tokens, pos)?;
+
+        Ok((left, current_pos))
+    }
+
+    fn parse_power(&self, tokens: &[String], pos: usize) -> Result<(f64, usize), String> {
+        if pos >= tokens.len() {
+            return Err("Unexpected end of power".to_string());
+        }
+
         let token = &tokens[pos];
         match token.parse::<f64>() {
-            Ok(num) => Ok((num, pos + 1)),
+            Ok(num) => {
+                let mut current_pos = pos + 1;
+                let mut result = num;
+
+                while current_pos < tokens.len() {
+                    let op = &tokens[current_pos];
+                    if op != "^" {
+                        break;
+                    }
+
+                    current_pos += 1;
+                    if current_pos >= tokens.len() {
+                        return Err("Expected number after ^".to_string());
+                    }
+
+                    match tokens[current_pos].parse::<f64>() {
+                        Ok(exponent) => {
+                            result = result.powf(exponent);
+                            current_pos += 1;
+                        }
+                        Err(_) => return Err(format!("Invalid exponent: {}", tokens[current_pos])),
+                    }
+                }
+
+                Ok((result, current_pos))
+            }
             Err(_) => Err(format!("Invalid number: {}", token)),
         }
     }
@@ -295,7 +370,15 @@ impl Render for Calculator {
             .child(self.render_calculator())
             .child(self.render_num_buttons(cx))
             .child(self.render_operator_buttons(cx))
-            .child(self.render_equals_sign(cx))
+            .child(
+                div()
+                    .flex()
+                    .gap_4()
+                    .items_center()
+                    .justify_center()
+                    .child(self.render_equals_sign(cx))
+                    .child(self.render_clear_button(cx))
+            )
     }
 }
 
